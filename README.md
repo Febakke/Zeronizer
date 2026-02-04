@@ -8,8 +8,16 @@
                                                     
 ```
 ## What it does
-Zeronizer scans a selected Figma component (or component set) and finds static `0` values in auto layout spacing/padding fields.  
-It then binds those fields to the `semantic/size/0` variable so spacing tokens are applied consistently.
+Zeronizer finds static `0` values in auto layout spacing/padding fields and binds them to the `semantic/size/0` variable.
+
+You can run it in two modes:
+- **Zeronize selection (fast):** scans one selected component or component set.
+- **Zeronize whole file (slower):** scans all pages and processes components across the file (with configured page exclusions).
+
+Rules:
+- Only works on components/component sets.
+- Instance nodes are skipped.
+- Already-bound variable fields are ignored.
 
 ## Install guide
 1. Download this repository.

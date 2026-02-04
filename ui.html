@@ -1,17 +1,106 @@
-<h2>Rectangle Creator</h2>
-<p>Count: <input id="count" type="number" value="5"></p>
-<button id="create">Create</button>
-<button id="cancel">Cancel</button>
-<script>
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
 
-document.getElementById('create').onclick = () => {
-  const textbox = document.getElementById('count');
-  const count = parseInt(textbox.value, 10);
-  parent.postMessage({ pluginMessage: { type: 'create-shapes', count } }, '*')
-}
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: Inter, sans-serif;
+        color: var(--figma-color-text);
+        background: var(--figma-color-bg);
+      }
 
-document.getElementById('cancel').onclick = () => {
-  parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*')
-}
+      h1 {
+        margin: 0 0 8px 0;
+        font-size: 16px;
+      }
 
-</script>
+      p {
+        margin: 0 0 12px 0;
+        font-size: 12px;
+        color: var(--figma-color-text-secondary);
+      }
+
+      .actions {
+        display: grid;
+        gap: 8px;
+      }
+
+      button {
+        border: 1px solid var(--figma-color-border);
+        border-radius: 6px;
+        background: var(--figma-color-bg);
+        color: var(--figma-color-text);
+        padding: 10px 12px;
+        font-size: 12px;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      button.primary {
+        background: var(--figma-color-bg-brand);
+        color: var(--figma-color-text-onbrand);
+        border-color: var(--figma-color-border-brand);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      #status {
+        margin-top: 12px;
+        min-height: 16px;
+        font-size: 12px;
+        color: var(--figma-color-text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Zeronizer</h1>
+    <p>Choose how you want to run the plugin.</p>
+
+    <div class="actions">
+      <button id="selection" class="primary">1) Zeronize selection (fast)</button>
+      <button id="whole-file">2) Zeronize whole file (slower)</button>
+    </div>
+
+    <div id="status"></div>
+
+    <script>
+      const selectionButton = document.getElementById('selection');
+      const wholeFileButton = document.getElementById('whole-file');
+      const status = document.getElementById('status');
+
+      function setRunning(running) {
+        selectionButton.disabled = running;
+        wholeFileButton.disabled = running;
+      }
+
+      selectionButton.onclick = () => {
+        setRunning(true);
+        status.textContent = 'Starting selection run...';
+        parent.postMessage({ pluginMessage: { type: 'run-selection' } }, '*');
+      };
+
+      wholeFileButton.onclick = () => {
+        setRunning(true);
+        status.textContent = 'Starting whole-file run...';
+        parent.postMessage({ pluginMessage: { type: 'run-whole-file' } }, '*');
+      };
+
+      onmessage = (event) => {
+        const msg = event.data.pluginMessage;
+        if (!msg) return;
+        if (msg.type === 'status') {
+          status.textContent = msg.message;
+        }
+      };
+    </script>
+  </body>
+</html>

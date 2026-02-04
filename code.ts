@@ -1,8 +1,27 @@
 const CONFIG = {
   searchValue: 0,
-  targetCollectionName: 'Semantic',
+  targetCollectionName: 'semantic',
   targetVariableName: 'size/0'
 } as const;
+
+const IGNORE_PAGE_NAMES = [
+  '🚩   Introduksjon',
+  '🌈   Alle komponenter',
+  ' $  Focus ',
+  ' $  Colors',
+  ' $  Typography',
+  ' $  Size',
+  ' $  Shadow',
+  ' $  Border radius',
+  ' $  Border width',
+  '⚙️   Base components',
+  '👀   Test',
+  '---'
+] as const;
+
+type UiToPluginMessage =
+  | { type: 'run-selection' }
+  | { type: 'run-whole-file' };
 
 type SpacingField =
   | 'itemSpacing'
@@ -20,6 +39,8 @@ const SPACING_FIELDS: readonly SpacingField[] = [
 ];
 
 type RunStats = {
+  pagesScanned: number;
+  pagesIgnored: number;
   componentsProcessed: number;
   nodesScanned: number;
   fieldsUpdated: number;
@@ -33,35 +54,57 @@ type NodeWithVariableBinding = SceneNode & {
   [key: string]: unknown;
 };
 
-void run();
+let isRunning = false;
 
-async function run() {
+figma.showUI(__html__, { width: 380, height: 280, themeColors: true });
+
+figma.ui.onmessage = async (msg: UiToPluginMessage) => {
+  if (isRunning) {
+    return;
+  }
+
+  isRunning = true;
+
   try {
-    const selectedNode = getValidatedSelection();
     const targetVariable = await getTargetVariable();
-    const components = getComponentsToProcess(selectedNode);
+    const stats = createEmptyStats();
 
-    const stats: RunStats = {
-      componentsProcessed: components.length,
-      nodesScanned: 0,
-      fieldsUpdated: 0,
-      staticMatchesIgnoredBecauseBound: 0,
-      instancesSkipped: 0
-    };
-
-    for (const component of components) {
-      scanNode(component, targetVariable, stats);
+    if (msg.type === 'run-selection') {
+      postStatus('Scanning selected component...');
+      const selectedNode = getValidatedSelection();
+      const components = getComponentsToProcess(selectedNode);
+      await zeronizeComponents(components, targetVariable, stats, 'selection');
+    } else {
+      postStatus('Loading pages...');
+      await figma.loadAllPagesAsync();
+      const components = await collectComponentsFromWholeFile(stats);
+      await zeronizeComponents(components, targetVariable, stats, 'whole-file');
     }
 
-    figma.closePlugin(
-      `Done. Updated ${stats.fieldsUpdated} field(s) across ${stats.componentsProcessed} component(s). ` +
-      `Scanned ${stats.nodesScanned} node(s), skipped ${stats.instancesSkipped} instance(s), ` +
-      `ignored ${stats.staticMatchesIgnoredBecauseBound} already-bound match(es).`
-    );
+    figma.closePlugin(formatSummary(stats));
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const message = error instanceof Error ? error.message : 'Unknown error.';
     figma.closePlugin(message);
   }
+};
+
+function createEmptyStats(): RunStats {
+  return {
+    pagesScanned: 0,
+    pagesIgnored: 0,
+    componentsProcessed: 0,
+    nodesScanned: 0,
+    fieldsUpdated: 0,
+    staticMatchesIgnoredBecauseBound: 0,
+    instancesSkipped: 0
+  };
+}
+
+function postStatus(message: string): void {
+  figma.ui.postMessage({
+    type: 'status',
+    message
+  });
 }
 
 function getValidatedSelection(): ComponentNode | ComponentSetNode {
@@ -73,7 +116,7 @@ function getValidatedSelection(): ComponentNode | ComponentSetNode {
 
   const selected = selection[0];
   if (selected.type !== 'COMPONENT' && selected.type !== 'COMPONENT_SET') {
-    throw new Error('This plugin only runs on components.');
+    throw new Error('This plugin only runs on components or component sets.');
   }
 
   return selected;
@@ -82,7 +125,7 @@ function getValidatedSelection(): ComponentNode | ComponentSetNode {
 async function getTargetVariable(): Promise<Variable> {
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   const semanticCollection = collections.find(
-    (collection) => collection.name === CONFIG.targetCollectionName
+    (collection) => collection.name.toLowerCase() === CONFIG.targetCollectionName
   );
 
   if (!semanticCollection) {
@@ -130,6 +173,51 @@ function getComponentsToProcess(
   );
 }
 
+async function collectComponentsFromWholeFile(stats: RunStats): Promise<ComponentNode[]> {
+  const ignoredPageNames = new Set(IGNORE_PAGE_NAMES.map((name) => name.trim()));
+  const components: ComponentNode[] = [];
+
+  for (const page of figma.root.children) {
+    if (ignoredPageNames.has(page.name.trim())) {
+      stats.pagesIgnored += 1;
+      continue;
+    }
+
+    stats.pagesScanned += 1;
+    postStatus(`Scanning page ${stats.pagesScanned}: ${page.name}`);
+
+    const pageComponents = page.findAllWithCriteria({ types: ['COMPONENT'] });
+    components.push(...pageComponents);
+    await yieldToFigma();
+  }
+
+  return components;
+}
+
+async function zeronizeComponents(
+  components: ComponentNode[],
+  targetVariable: Variable,
+  stats: RunStats,
+  mode: 'selection' | 'whole-file'
+): Promise<void> {
+  if (components.length === 0) {
+    if (mode === 'selection') {
+      throw new Error('No components found in the selected node.');
+    }
+    throw new Error('No components found in scanned pages.');
+  }
+
+  for (let i = 0; i < components.length; i += 1) {
+    if (mode === 'whole-file' && (i === 0 || i % 25 === 0)) {
+      postStatus(`Zeronizing components: ${i + 1}/${components.length}`);
+      await yieldToFigma();
+    }
+
+    scanNode(components[i], targetVariable, stats);
+    stats.componentsProcessed += 1;
+  }
+}
+
 function scanNode(node: SceneNode, targetVariable: Variable, stats: RunStats): void {
   if (node.type === 'INSTANCE') {
     stats.instancesSkipped += 1;
@@ -163,7 +251,7 @@ function applySpacingVariableBindings(
       continue;
     }
 
-    const value = (nodeWithVariableBindings as Record<string, unknown>)[field];
+    const value = nodeWithVariableBindings[field];
     if (typeof value !== 'number' || value !== CONFIG.searchValue) {
       continue;
     }
@@ -185,7 +273,7 @@ function getBoundVariableMap(
     return {};
   }
 
-  const allBoundVariables = node.boundVariables as Record<string, VariableAlias | undefined>;
+  const allBoundVariables = node.boundVariables;
   return {
     itemSpacing: allBoundVariables.itemSpacing,
     paddingTop: allBoundVariables.paddingTop,
@@ -193,4 +281,23 @@ function getBoundVariableMap(
     paddingBottom: allBoundVariables.paddingBottom,
     paddingLeft: allBoundVariables.paddingLeft
   };
+}
+
+function formatSummary(stats: RunStats): string {
+  const pagePart =
+    stats.pagesScanned > 0 || stats.pagesIgnored > 0
+      ? `Pages scanned: ${stats.pagesScanned}, ignored: ${stats.pagesIgnored}. `
+      : '';
+
+  return (
+    `${pagePart}Updated ${stats.fieldsUpdated} field(s) in ${stats.componentsProcessed} component(s). ` +
+    `Scanned ${stats.nodesScanned} node(s), skipped ${stats.instancesSkipped} instance(s), ` +
+    `ignored ${stats.staticMatchesIgnoredBecauseBound} already-bound match(es).`
+  );
+}
+
+function yieldToFigma(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
 }
