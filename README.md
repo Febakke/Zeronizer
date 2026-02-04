@@ -1,3 +1,4 @@
+**⚠️ This Figma plugin only works with Designsystemet Community file ⚠️**
 ```text
   ____________ _____   ____  _   _ _____ ____________ _____  
  |___  /  ____|  __ \ / __ \| \ | |_   _|___  /  ____|  __ \ 
@@ -7,6 +8,8 @@
  /_____|______|_|  \_\\____/|_| \_|_____/_____|______|_|  \_\
                                                     
 ```
+
+
 ## What it does
 Zeronizer finds static `0` values in auto layout spacing/padding fields and binds them to the `semantic/size/0` variable.
 
