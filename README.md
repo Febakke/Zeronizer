@@ -7,9 +7,6 @@
  /_____|______|_|  \_\\____/|_| \_|_____/_____|______|_|  \_\
                                                     
 ```
-
-# Zeronizer
-
 ## What it does
 Zeronizer scans a selected Figma component (or component set) and finds static `0` values in auto layout spacing/padding fields.  
 It then binds those fields to the `semantic/size/0` variable so spacing tokens are applied consistently.
