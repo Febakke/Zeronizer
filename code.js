@@ -46,11 +46,14 @@ figma.ui.onmessage = async (msg) => {
             const components = await collectComponentsFromWholeFile(stats);
             await zeronizeComponents(components, targetVariable, stats, 'whole-file');
         }
-        figma.closePlugin(formatSummary(stats));
+        postDone(formatSummary(stats));
     }
     catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error.';
-        figma.closePlugin(message);
+        postError(message);
+    }
+    finally {
+        isRunning = false;
     }
 };
 function createEmptyStats() {
@@ -67,6 +70,18 @@ function createEmptyStats() {
 function postStatus(message) {
     figma.ui.postMessage({
         type: 'status',
+        message
+    });
+}
+function postDone(message) {
+    figma.ui.postMessage({
+        type: 'done',
+        message
+    });
+}
+function postError(message) {
+    figma.ui.postMessage({
+        type: 'error',
         message
     });
 }

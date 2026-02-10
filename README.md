@@ -21,6 +21,7 @@ Rules:
 - Only works on components/component sets.
 - Instance nodes are skipped.
 - Already-bound variable fields are ignored.
+- The plugin stays open after a run and shows the completion message in the UI.
 
 ## Install guide
 1. Download this repository.

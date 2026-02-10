@@ -81,10 +81,12 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
       await zeronizeComponents(components, targetVariable, stats, 'whole-file');
     }
 
-    figma.closePlugin(formatSummary(stats));
+    postDone(formatSummary(stats));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error.';
-    figma.closePlugin(message);
+    postError(message);
+  } finally {
+    isRunning = false;
   }
 };
 
@@ -103,6 +105,20 @@ function createEmptyStats(): RunStats {
 function postStatus(message: string): void {
   figma.ui.postMessage({
     type: 'status',
+    message
+  });
+}
+
+function postDone(message: string): void {
+  figma.ui.postMessage({
+    type: 'done',
+    message
+  });
+}
+
+function postError(message: string): void {
+  figma.ui.postMessage({
+    type: 'error',
     message
   });
 }
