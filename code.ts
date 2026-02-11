@@ -14,7 +14,6 @@ const IGNORE_PAGE_NAMES = [
   ' $  Shadow',
   ' $  Border radius',
   ' $  Border width',
-  '⚙️   Base components',
   '👀   Test',
   '---'
 ] as const;
